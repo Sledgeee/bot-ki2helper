@@ -1,60 +1,46 @@
-import os
-import pytz
-import db
-from bson import ObjectId
 from bot import CHAT_ID, bot
-from utils import format_dt
+from utils import format_dt, api_request
+from pytz import timezone
 from datetime import datetime
-
-
-OWNER_ID = os.getenv("OWNER_ID")
 
 
 def check_birthday(now: datetime):
     if now.hour == 0 and now.minute == 0:
-        birthday_items = db.birthday.find({}, {"_id": 0})
+        birthday_items = api_request('get', 'crud/birthdays')
         now_formatted = f"{format_dt(now.day)}.{format_dt(now.month)}"
         for item in birthday_items:
             if item['date'] == now_formatted:
-                bot.send_message(CHAT_ID, f"{item['student_name']} сьогодні святкує <b>День Народження!</b>",
+                bot.send_message(CHAT_ID, f"<b>{item['student_name']}</b> сьогодні святкує День Народження!",
                                  parse_mode='Html')
                 bot.send_sticker(CHAT_ID, "CAACAgIAAxkBAAEG9LhjpKhQ2FUi31gbecql2Kr89xrLBQAChQIAAkGa3Q37oxVj75ZDnywE")
 
 
 def check_schedule(now: datetime):
     if (now.hour == 7 and now.minute == 55) or 8 < now.hour < 20:
-        if db.schedule.count_documents() == 0:
+        week = api_request('get', 'crud/week')[0]['type']
+        items = api_request('get', f'schedule/filtered/today/{week}')
+        if len(items) == 0:
             return
         else:
-            week = (db.week.find_one({}, {"_id": 0}))["type"]
-            timetable_items = db.timetable.find({}, {"_id": 0}).sort("number")
-            schedule_items = db.schedule.find({"day_number": now.weekday() + 1,
-                                               "$or": [{"week": week}, {"week": "-"}]}, {"_id": 0}).sort("number")
-            for item in schedule_items:
+            timetable_items = api_request('get', 'crud/timetable')[0]['items']
+            for item in items:
+                lesson = item['lesson']
                 hour = timetable_items[item["number"] - 1]["start_hour"]
-                minute = timetable_items[item["number"] - 1]["start_minute"]
+                minute = timetable_items[item["number"] - 1]["start_minute"] - 5
                 if minute < 0:
                     hour -= 1
                     minute += 60
                 if hour == now.hour and minute == now.minute:
-                    lesson = db.lesson.find_one({"_id": item["lesson"]})
-                    teacher = db.teacher.find_one({"_id": lesson["teacher"]})
-                    zoom = db.zoom.find_one({"lesson": item["lesson"]})
-                    return f"⚡️️️⚡️️⚡️ Через 5 хв розпочинається {lesson['type']} {lesson['name']}," \
-                           f" {teacher['name']}\nПосилання: {zoom}"
-
-
-def notify_schedule(now: datetime):
-    if now.hour == 7 and now.minute == 30 and now.weekday() < 6:
-        pass
+                    bot.send_message(CHAT_ID, f"⚡️️️⚡️️⚡️ Через 5 хв розпочинається:\n{lesson['type']} {lesson['name']},"
+                                              f" {lesson['teacher']}\nАудиторія: {item['cabinet']}\n"
+                                              f"Посилання: {lesson['zoom'] if lesson['zoom'] != '' else 'немає'}")
 
 
 def swap_week(now: datetime):
     if now.hour == 0 and now.minute == 0 and now.weekday() == 0:
-        week = (db.week.find_one({}, {"_id": 0}))["type"]
-        new_week = "Чисельник" if week == "Знаменник" else "Знаменник"
-        db.week.update_one({"type": week}, {"$set": {"type": new_week}})
-        bot.send_message(OWNER_ID, f"Тиждень оновлено, встановлено {new_week}")
+        week = api_request('get', 'crud/week')[0]
+        new_week = "Чисельник" if week["type"] == "Знаменник" else "Знаменник"
+        api_request('put', f'crud/week/{week["_id"]}', json={"type": new_week})
 
 
 def new_year(now: datetime):
@@ -63,12 +49,9 @@ def new_year(now: datetime):
 
 
 def start_cron(event):
-    now = datetime.now(tz=pytz.timezone('Europe/Kiev'))
-    bot_status = db.health.get("helper")
-    if bot_status["status"] == "Online":
-        cron = db.app.find_one({"_id": ObjectId(os.getenv("APP_CONFIG_ID"))}, {"_id": 0})['cron']
-        jobs = cron['jobs']
-        if cron['run']:
-            for job in jobs:
-                if job['run']:
-                    globals()[job['name']](now)
+    now = datetime.now(tz=timezone('Europe/Kiev'))
+    cron = api_request('get', f'crud/cron')[0]
+    if cron['run'] == 1:
+        for key in cron['jobs']:
+            if cron['jobs'][key]['run'] == 1:
+                globals()[key](now)
