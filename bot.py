@@ -147,12 +147,6 @@ def schedule_today_cmd(message: Message):
             bot.send_message(message.chat.id, 'Сьогодні немає пар 🤩')
 
 
-@bot.message_handler(commands=["nearest"])
-def nearest_cmd(message: Message):
-    result = api_request('get', 'schedule/nearest')
-    bot.send_message(message.chat.id, result)
-
-
 @bot.message_handler(commands=["cock"])
 def cock_cmd(message: Message):
     cock_size = random.randint(0, 50)
@@ -205,7 +199,6 @@ user_commands = [
     BotCommand("/cabinet", "Отримати номер кабінету пари"),
     BotCommand("/schedule", "Отримати розклад пар на тижден"),
     BotCommand("/schedule_today", "Отримати розклад пар на сьогоднішній день"),
-    BotCommand("/nearest", "Отримати найближчу пару та час до її початку"),
     BotCommand("/cock", "🐓")
 ]
 bot.set_my_commands(commands=user_commands)
