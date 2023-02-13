@@ -48,6 +48,18 @@ def new_year(now: datetime):
         bot.send_document(CHAT_ID, '/static/files/van.mp3')
 
 
+def scheduled_events(now: datetime):
+    events = api_request('get', 'events')
+    if len(events) > 0:
+        for event in events:
+            start_date = datetime.strptime(event['date'], "%d.%m.%Y %H:%M")
+            diff = (start_date - now).total_seconds() / 60
+            if diff < 0:
+                api_request('delete', f'events/{event["_id"]}')
+            elif 0 <= diff <= 5:
+                bot.send_message(CHAT_ID, f"⚡️️️⚡️️⚡️ Через 5 хв розпочинається: {event['name']}\n{event['description']}")
+
+
 def start_cron(event):
     now = datetime.now(tz=timezone('Europe/Kiev'))
     cron = api_request('get', f'crud/cron')[0]
@@ -55,3 +67,4 @@ def start_cron(event):
         for key in cron['jobs']:
             if cron['jobs'][key]['run'] == 1:
                 globals()[key](now)
+        scheduled_events(now)

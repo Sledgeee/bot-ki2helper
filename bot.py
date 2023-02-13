@@ -72,7 +72,7 @@ def week_cmd(message: Message):
 
 @bot.message_handler(commands=["zoom"])
 def zoom_cmd(message: Message):
-    lessons = api_request('get', 'crud/lessons')
+    lessons = sorted(list(api_request('get', 'crud/lessons')), key=lambda x: x['short_name'])
     if len(lessons) == 0:
         bot.send_message(message.chat.id, 'Жодної пари ще не додано ⚠️')
     else:
@@ -87,15 +87,25 @@ def zoom_cmd(message: Message):
 
 @bot.message_handler(commands=["cabinet"])
 def cabinet_cmd(message: Message):
-    schedule = api_request('get', 'crud/schedule')
-    if len(schedule) == 0:
+    old_schedule = list(api_request('get', 'crud/schedule'))
+    if len(old_schedule) == 0:
         bot.send_message(message.chat.id, 'Жодної пари ще не додано ⚠️')
     else:
-        markup = InlineKeyboardMarkup()
+        schedule = sorted(old_schedule, key=lambda x: x['lesson']['short_name'])
+        texts = list()
+        ids = list()
+
         for item in schedule:
+            text = f"{item['lesson']['short_name']} {item['lesson']['type']} ({item['lesson']['teacher']})"
+            if text not in texts:
+                texts.append(text)
+                ids.append(item['_id'])
+
+        markup = InlineKeyboardMarkup()
+        for i in range(len(texts)):
             markup.row(InlineKeyboardButton(
-                text=f"{item['lesson']['short_name']} {item['lesson']['type']} ({item['lesson']['teacher']})",
-                callback_data=f"cab_{item['_id']}"
+                text=texts[i],
+                callback_data=f"cab_{ids[i]}"
             ))
         bot.send_message(message.chat.id, 'Оберіть потрібний предмет:', reply_markup=markup)
 
